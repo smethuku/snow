@@ -52,3 +52,51 @@ ORDER BY u.username;
 
 -- Clean up
 DROP TABLE IF EXISTS user_list;
+
+-----------------------------------
+
+CREATE OR REPLACE PROCEDURE get_rsa_key_set_times()
+RETURNS TABLE (username STRING, rsa_key_1_set_time TIMESTAMP_LTZ, rsa_key_2_set_time TIMESTAMP_LTZ)
+LANGUAGE SQL
+AS
+$$
+DECLARE
+  cur CURSOR FOR SELECT name FROM information_schema.users WHERE deleted_on IS NULL;
+  username VARCHAR;
+  rsa_key_1_set_time TIMESTAMP_LTZ;
+  rsa_key_2_set_time TIMESTAMP_LTZ;
+BEGIN
+  OPEN cur;
+  
+  LET results := (SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*)) FROM (
+    LOOP
+      FETCH cur INTO username;
+      IF (SQLCODE = 100) THEN
+        BREAK;
+      END IF;
+      
+      EXECUTE IMMEDIATE 'DESCRIBE USER ' || username;
+      
+      SELECT value::timestamp_ltz INTO rsa_key_1_set_time
+      FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+      WHERE property = 'RSA_PUBLIC_KEY_LAST_SET_TIME';
+      
+      SELECT value::timestamp_ltz INTO rsa_key_2_set_time
+      FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
+      WHERE property = 'RSA_PUBLIC_KEY_2_LAST_SET_TIME';
+      
+      SELECT :username AS username, 
+             :rsa_key_1_set_time AS rsa_key_1_set_time, 
+             :rsa_key_2_set_time AS rsa_key_2_set_time;
+    END LOOP;
+  ));
+  
+  CLOSE cur;
+  
+  RETURN TABLE(SELECT value:username::STRING, 
+                      value:rsa_key_1_set_time::TIMESTAMP_LTZ, 
+                      value:rsa_key_2_set_time::TIMESTAMP_LTZ 
+               FROM TABLE(FLATTEN(input => :results)));
+END;
+$$
+;
