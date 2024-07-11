@@ -24,3 +24,31 @@ FROM
     ) p
 ORDER BY 
     u.name;
+
+
+-- Get list of users
+SHOW USERS;
+
+-- Store results in a temporary table
+CREATE OR REPLACE TEMPORARY TABLE user_list AS
+SELECT "name" AS username FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+
+-- Loop through users and get RSA_PUBLIC_KEY_LAST_SET_TIME
+SELECT 
+    u.username,
+    (SELECT value::timestamp_ltz
+     FROM TABLE(RESULT_SCAN(LAST_QUERY_ID(-1)))
+     WHERE "property" = 'RSA_PUBLIC_KEY_LAST_SET_TIME') AS rsa_public_key_last_set_time,
+    (SELECT value::timestamp_ltz
+     FROM TABLE(RESULT_SCAN(LAST_QUERY_ID(-1)))
+     WHERE "property" = 'RSA_PUBLIC_KEY_2_LAST_SET_TIME') AS rsa_public_key_2_last_set_time
+FROM user_list u
+WHERE EXISTS (
+    SELECT 1 
+    FROM TABLE(RESULT_SCAN(EXECUTE_IMMEDIATE('DESCRIBE USER ' || u.username)))
+    WHERE "property" IN ('RSA_PUBLIC_KEY_LAST_SET_TIME', 'RSA_PUBLIC_KEY_2_LAST_SET_TIME')
+)
+ORDER BY u.username;
+
+-- Clean up
+DROP TABLE IF EXISTS user_list;
