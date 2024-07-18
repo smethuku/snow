@@ -113,8 +113,9 @@ DECLARE
   user_name VARCHAR;
   rsa_key_1_set_time TIMESTAMP_LTZ;
   rsa_key_2_set_time TIMESTAMP_LTZ;
+  result_set ARRAY;
 BEGIN
-  LET result_set ARRAY := ARRAY_CONSTRUCT();
+  result_set := ARRAY_CONSTRUCT();
   
   OPEN cur;
   
