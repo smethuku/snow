@@ -110,41 +110,43 @@ AS
 $$
 DECLARE
   cur CURSOR FOR SELECT name FROM information_schema.users WHERE deleted_on IS NULL;
-  username VARCHAR;
+  user_name VARCHAR;
   rsa_key_1_set_time TIMESTAMP_LTZ;
   rsa_key_2_set_time TIMESTAMP_LTZ;
 BEGIN
+  LET result_set ARRAY := ARRAY_CONSTRUCT();
+  
   OPEN cur;
   
-  LET results := (SELECT ARRAY_AGG(OBJECT_CONSTRUCT(*)) FROM (
-    LOOP
-      FETCH cur INTO username;
-      IF (SQLCODE = 100) THEN
-        BREAK;
-      END IF;
-      
-      EXECUTE IMMEDIATE 'DESCRIBE USER ' || username;
-      
-      SELECT value::timestamp_ltz INTO rsa_key_1_set_time
-      FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
-      WHERE property = 'RSA_PUBLIC_KEY_LAST_SET_TIME';
-      
-      SELECT value::timestamp_ltz INTO rsa_key_2_set_time
-      FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))
-      WHERE property = 'RSA_PUBLIC_KEY_2_LAST_SET_TIME';
-      
-      SELECT :username AS username, 
-             :rsa_key_1_set_time AS rsa_key_1_set_time, 
-             :rsa_key_2_set_time AS rsa_key_2_set_time;
-    END LOOP;
-  ));
+  LOOP
+    FETCH cur INTO user_name;
+    IF (SQLCODE = 100) THEN
+      BREAK;
+    END IF;
+    
+    EXECUTE IMMEDIATE 'DESCRIBE USER ' || user_name;
+    
+    LET describe_result RESULTSET := (SELECT * FROM TABLE(RESULT_SCAN(LAST_QUERY_ID())));
+    
+    SELECT value::timestamp_ltz INTO rsa_key_1_set_time
+    FROM describe_result
+    WHERE property = 'RSA_PUBLIC_KEY_LAST_SET_TIME';
+    
+    SELECT value::timestamp_ltz INTO rsa_key_2_set_time
+    FROM describe_result
+    WHERE property = 'RSA_PUBLIC_KEY_2_LAST_SET_TIME';
+    
+    result_set := ARRAY_APPEND(result_set, OBJECT_CONSTRUCT('username', user_name, 
+                                                            'rsa_key_1_set_time', rsa_key_1_set_time, 
+                                                            'rsa_key_2_set_time', rsa_key_2_set_time));
+  END LOOP;
   
   CLOSE cur;
   
   RETURN TABLE(SELECT value:username::STRING, 
                       value:rsa_key_1_set_time::TIMESTAMP_LTZ, 
                       value:rsa_key_2_set_time::TIMESTAMP_LTZ 
-               FROM TABLE(FLATTEN(input => :results)));
+               FROM TABLE(FLATTEN(input => result_set)));
 END;
 $$
 ;
