@@ -35,3 +35,35 @@ if ($failureActions -ne $null) {
 } else {
     Write-Host "No failure actions configured or service not found."
 }
+
+
+-- claude response --
+# Define the service name
+$serviceName = "MSOLAP`$SQL2019" # Adjust this to match your SSAS instance name
+
+# Get the service
+$service = Get-WmiObject -Class Win32_Service -Filter "Name='$serviceName'"
+
+if ($service) {
+    # Get the recovery actions
+    $recoveryActions = $service.GetRecoveryActions().Actions
+
+    # Check if any of the actions is set to restart
+    $restartOnFailure = $recoveryActions | Where-Object { $_.Type -eq 1 }
+
+    if ($restartOnFailure) {
+        Write-Host "The SSAS service is set to restart on failure."
+        
+        # Display the restart settings
+        for ($i = 0; $i -lt $recoveryActions.Count; $i++) {
+            $action = $recoveryActions[$i]
+            if ($action.Type -eq 1) {
+                Write-Host "Action $(($i + 1)): Restart after $($action.Delay) seconds"
+            }
+        }
+    } else {
+        Write-Host "The SSAS service is not set to restart on failure."
+    }
+} else {
+    Write-Host "SSAS service not found. Please check the service name."
+}
