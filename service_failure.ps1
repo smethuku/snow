@@ -41,29 +41,36 @@ if ($failureActions -ne $null) {
 # Define the service name
 $serviceName = "MSOLAP`$SQL2019" # Adjust this to match your SSAS instance name
 
-# Get the service
-$service = Get-WmiObject -Class Win32_Service -Filter "Name='$serviceName'"
-
-if ($service) {
-    # Get the recovery actions
-    $recoveryActions = $service.GetRecoveryActions().Actions
-
-    # Check if any of the actions is set to restart
-    $restartOnFailure = $recoveryActions | Where-Object { $_.Type -eq 1 }
-
-    if ($restartOnFailure) {
-        Write-Host "The SSAS service is set to restart on failure."
-        
-        # Display the restart settings
-        for ($i = 0; $i -lt $recoveryActions.Count; $i++) {
-            $action = $recoveryActions[$i]
-            if ($action.Type -eq 1) {
-                Write-Host "Action $(($i + 1)): Restart after $($action.Delay) seconds"
-            }
+# Function to parse sc.exe output
+function Parse-ScOutput {
+    param ($output)
+    $result = @{}
+    $output | ForEach-Object {
+        if ($_ -match '^\s*(\w+)\s*:(.*)$') {
+            $result[$matches[1]] = $matches[2].Trim()
         }
+    }
+    return $result
+}
+
+# Get service recovery information
+$scOutput = sc.exe qfailure $serviceName
+$recoveryInfo = Parse-ScOutput $scOutput
+
+if ($recoveryInfo.ContainsKey('RESET_PERIOD')) {
+    Write-Host "Recovery settings for SSAS service ($serviceName):"
+    Write-Host "Reset period: $($recoveryInfo['RESET_PERIOD'])"
+    Write-Host "First failure action: $($recoveryInfo['1ST_FAILURE'])"
+    Write-Host "Second failure action: $($recoveryInfo['2ND_FAILURE'])"
+    Write-Host "Subsequent failures: $($recoveryInfo['SUBSEQUENT_FAILURES'])"
+
+    if ($recoveryInfo['1ST_FAILURE'] -eq 'RESTART' -or 
+        $recoveryInfo['2ND_FAILURE'] -eq 'RESTART' -or 
+        $recoveryInfo['SUBSEQUENT_FAILURES'] -eq 'RESTART') {
+        Write-Host "The SSAS service is set to restart on at least one failure condition."
     } else {
-        Write-Host "The SSAS service is not set to restart on failure."
+        Write-Host "The SSAS service is not set to restart on any failure condition."
     }
 } else {
-    Write-Host "SSAS service not found. Please check the service name."
+    Write-Host "Unable to retrieve recovery information for the SSAS service. Please check if the service name is correct and if you have the necessary permissions."
 }
