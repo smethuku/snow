@@ -37,7 +37,7 @@ BEGIN
         LET current_role STRING := role_rec."name";
 
         -- Step 3: Run SHOW GRANTS TO ROLE for each role
-        LET show_grants_sql STRING := 'SHOW GRANTS TO ROLE IDENTIFIER(\'' || current_role || '\')';
+        LET show_grants_sql STRING := 'SHOW GRANTS OF ROLE IDENTIFIER(\'' || current_role || '\')';
         EXECUTE IMMEDIATE :show_grants_sql;
 
         -- Step 4: Insert results into temp table
@@ -63,6 +63,3 @@ BEGIN
     RETURN TABLE(res);
 END;
 $$;
-
--- Run it
-CALL get_all_role_grants();
